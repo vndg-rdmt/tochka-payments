@@ -10,33 +10,59 @@ import (
 	"github.com/goccy/go-json"
 )
 
+type TochkaError struct {
+	Code    string `json:"code"`
+	ID      string `json:"id"`
+	Message string `json:"message"`
+	Errors  []struct {
+		ErrorCode string `json:"errorCode"`
+		Message   string `json:"message"`
+		URL       string `json:"url"`
+	} `json:"Errors"`
+}
+
+func (t *TochkaError) Error() string {
+	return t.Message
+}
+
 func New(
 	customerCode string,
 	tochakToken string,
 	tochkaUrl string,
+	redirectUrl string,
+	failRedirectUrl string,
 ) Service {
 	return &serviceimpl{
-		customerCode: customerCode,
-		tochakaToken: tochakToken,
-		tochkaUrl:    tochkaUrl,
+		customerCode:    customerCode,
+		tochakaToken:    tochakToken,
+		tochkaUrl:       tochkaUrl,
+		redirectUrl:     redirectUrl,
+		failRedirectUrl: failRedirectUrl,
 	}
 }
 
 type serviceimpl struct {
-	customerCode string
-	tochakaToken string
-	tochkaUrl    string
+	customerCode    string
+	tochakaToken    string
+	tochkaUrl       string
+	redirectUrl     string
+	failRedirectUrl string
 }
 
 // Payment implements Service.
-func (s *serviceimpl) Payment(ctx context.Context, amount uint64, purpose string) (string, error) {
+func (s *serviceimpl) Payment(ctx context.Context,
+	redirectUrl string,
+	failRedirectUrl string,
+	amount uint64,
+	purpose string,
+) (string, error) {
 	b, err := json.Marshal(PaymentRequest{
 		Data: PaymentRequestData{
 			CustomerCode:    s.customerCode,
 			Amount:          strconv.FormatUint(amount, 10) + ".00",
 			Purpose:         purpose,
-			RedirectUrl:     "",
-			FailRedirectUrl: "",
+			RedirectUrl:     s.redirectUrl,
+			FailRedirectUrl: s.failRedirectUrl,
 			PaymentMode:     []string{"card"},
 			SaveCard:        true,
 			ConsumnerId:     s.customerCode,
@@ -67,6 +93,14 @@ func (s *serviceimpl) Payment(ctx context.Context, amount uint64, purpose string
 	responsePayload, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", err
+	}
+
+	if resp.StatusCode != 200 {
+		var tochkaerr = new(TochkaError)
+		if err = json.Unmarshal(responsePayload, tochkaerr); err != nil {
+			return "", err
+		}
+		return "", tochkaerr
 	}
 
 	var data PaymentResponse

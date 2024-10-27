@@ -11,6 +11,15 @@ type Token struct {
 }
 
 type Service interface {
-	Payment(ctx context.Context, amount uint64, purpose string) (string, error)
+	Payment(ctx context.Context,
+		redirectUrl string,
+		failRedirectUrl string,
+		amount uint64,
+		purpose string,
+	) (
+		string,
+		error,
+	)
+
 	Status(ctx context.Context, id string) ([]byte, error)
 }

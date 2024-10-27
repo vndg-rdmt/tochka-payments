@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -42,10 +42,15 @@ func (f *Fiber) Payment(c *fiber.Ctx) error {
 		return c.SendStatus(fiber.StatusBadRequest)
 	}
 
-	paymentId, err := f.service.Payment(ctx, payload.Amount, payload.Purpose)
+	host := string(c.Request().Host())
+	paymentId, err := f.service.Payment(ctx, host, host, payload.Amount, payload.Purpose)
 	if err != nil {
-		fmt.Println(err)
-		return c.SendStatus(fiber.StatusServiceUnavailable)
+		if tochkaerr, ok := err.(*service.TochkaError); ok {
+			if code, converted := strconv.Atoi(tochkaerr.Code); converted == nil {
+				return c.Status(code).JSON(tochkaerr)
+			}
+			return c.Status(fiber.StatusBadRequest).JSON(tochkaerr)
+		}
 	}
 
 	return c.Status(fiber.StatusOK).JSON(MakePaymentResponse{
